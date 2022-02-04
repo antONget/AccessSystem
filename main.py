@@ -3,6 +3,8 @@ from PIL import Image, ImageDraw
 import pickle
 import cv2
 import os
+from collections import defaultdict
+import numpy as np
 
 def face_rec():
     zveri_face_img = face_recognition.load_image_file('images/zveri_4.jpg')
@@ -46,14 +48,17 @@ def compare_faces(img1_path, img2_path):
     print(result)
 
 
-def detect_person_in_video():
+def detect_person_in_video(add_person = 0):
 # функция обнаруживает и распазнает лица в видеопатоке
-    # загрузка encoding-вектора известных лиц
-    list_filename_encoding = os.listdir('Enoodings_faces_persons')
-    data = {}
-    for filename_enciding in list_filename_encoding:
 
-        data = pickle.loads(open("Veronika _encidings.pickle", "rb").read())
+    # загрузка encoding-вектора известных лиц
+    data = {}
+    list_filename_encoding = os.listdir('Encodings_faces_persons')
+    for filename_enciding in list_filename_encoding:
+        filename_enciding_path = 'Encodings_faces_persons/'+filename_enciding
+        data_face_person = pickle.loads(open(filename_enciding_path, "rb").read())
+        data[data_face_person['name']] = data_face_person['encodings']
+    persons = data.keys()
     video = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
     while True:
@@ -61,20 +66,27 @@ def detect_person_in_video():
 
         locations = face_recognition.face_locations(image, model='hog')
         encodings = face_recognition.face_encodings(image, locations)
-
+        person_unknown_loc = []
+        person_unknown_enc = []
         for face_encoding, face_location in zip(encodings, locations):
-            result = face_recognition.compare_faces(data["encodings"], face_encoding)
             match = None
+            for person in persons:
+                result = face_recognition.compare_faces(data[person], face_encoding)
 
-            if True in result:
-                match = data["name"]
-                print(f'Hi {match}')
-            else:
-                print('Ho is')
+                color = [0, 0, 255]
+                if any(result):
+                    match = person
+                    print(f'Hi {match}')
+                    color = [0, 255, 0]
+                    break
+            if match == None:
+                print('Who is it?')
+                person_unknown_loc.append(face_location)
+                person_unknown_enc.append(face_encoding)
 
             left_top = (face_location[3], face_location[0])
             right_bottom = (face_location[1], face_location[2])
-            color = [0, 255, 0]
+            # color = [0, 255, 0]
             cv2.rectangle(image, left_top, right_bottom, color, 4)
 
             left_bottom = (face_location[3], face_location[2])
@@ -92,13 +104,69 @@ def detect_person_in_video():
 
         cv2.imshow('detect_person_in _video', image)
         k = cv2.waitKey(1)
-        if k == ord("q"):
+        print(k)
+        if k == 233:
+            with open(f"data_encidings.pickle", "wb") as file:
+                file.write(pickle.dumps(data))
             break
+        if add_person:
+            face_to_encoding(image, person_unknown_loc, person_unknown_enc, data)
+
+def face_to_encoding(image, face_location, face_encoding, data):
+
+    face_location = np.array(face_location)
+    face_encoding = np.array(face_encoding)
+
+    # data = {}#defaultdict(list)
+    # list_filename_encoding = os.listdir('Encodings_faces_persons')
+    # for filename_enciding in list_filename_encoding:
+    #     filename_enciding_path = 'Encodings_faces_persons/'+filename_enciding
+    #     data_face_person = pickle.loads(open(filename_enciding_path, "rb").read())
+    #
+    #     data[data_face_person['name']] = data_face_person['encodings']
+
+    for loc in face_location:
+
+        left_top = (loc[3], loc[0])
+        right_bottom = (loc[1], loc[2])
+        color = [255, 0, 0]
+        cv2.rectangle(image, left_top, right_bottom, color, 4)
+        cv2.imshow('detect_person_in _video', image)
+        k = cv2.waitKey(1)
+        name_person = input("Введите имя неизвестной персоны: ")
+
+        # print(data.keys())
+
+        flag = 1
+        for key in data.keys():
+            if name_person == key:
+                temp_enc = data[name_person]
+                temp_enc.insert(-1, face_encoding)
+                data[name_person] = temp_enc
+                flag = 0
+                break
+        if flag:
+            data[name_person] = face_encoding
+
+    # print('---')
+    # print(data.keys())
+
+
+    # for key, value in data:
+    #     if key == name_person:
+    #         data[name_person].append(face_encoding)
+    #         flag = 1
+    #         break
+    # if flag == 0:
+    #     data[name_person].append(face_encoding)
+
+
+
 
 def main():
     # face_rec()
     # print(extacting_faces("images/zveri_3.jpg"))
     # compare_faces('images/roma_1.jpg', 'images/roma_2.jpg')
-    detect_person_in_video()
+    detect_person_in_video(1)
 if __name__ == '__main__':
     main()
